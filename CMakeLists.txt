@@ -171,6 +171,10 @@ endif()
 # copy samples to install directory
 set (INSTALL_SAMPLES OFF CACHE BOOL "${INSTALL_SAMPLES_DESCR}")
 
+set(INSTALL_DIR ${SKBUILD_DATA_DIR})
+set(CMAKE_INSTALL_PREFIX ${SKBUILD_DATA_DIR})
+set(CMAKE_INSTALL_PREFIX_PREF ${SKBUILD_DATA_DIR})
+
 # install dir of the project
 if (NOT DEFINED INSTALL_DIR)
   # set default install directory for Windows

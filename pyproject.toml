@@ -1,0 +1,68 @@
+[project]
+name = "netgen_occt"
+version = "0.0.3"
+description="Open CASCADE Technology libraries, used by Netgen Mesher"
+requires-python = ">=3.8"
+classifiers = [
+  "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)"
+]
+
+[build-system]
+requires = ["scikit-build-core>=0.3.3", "cmake"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+wheel.py-api = "py3"
+experimental = true
+wheel.install-dir = "/data"
+wheel.exclude = ["**.dylib", "**.so", "share"]
+install.strip = true
+cmake.build-type = "Release"
+# build-dir = "build_py/{wheel_tag}" # build debugging - set a build-directly
+
+[tool.scikit-build.cmake.define]
+BUILD_LIBRARY_TYPE="Shared"
+BUILD_SOVERSION_NUMBERS="3"
+BUILD_MODULE_FoundationClasses="ON"
+BUILD_MODULE_ModelingData="ON"
+BUILD_MODULE_ModelingAlgorithms="ON"
+BUILD_MODULE_DataExchange="ON"
+BUILD_MODULE_Visualization="OFF"
+BUILD_MODULE_ApplicationFramework="OFF"
+BUILD_MODULE_Draw="OFF"
+BUILD_MODULE_DETools="OFF"
+USE_FREETYPE="OFF"
+USE_OPENGL="OFF"
+USE_XLIB="OFF"
+BUILD_DOC_Overview="OFF"
+INSTALL_DIR_BIN="bin"
+INSTALL_DIR_SCRIPT="bin"
+INSTALL_DIR_LIB="lib"
+INSTALL_DIR_INCLUDE="include/opencascade"
+INSTALL_DIR_RESOURCE="share/opencascade/resources"
+INSTALL_DIR_DOC="share"
+INSTALL_DIR_DATA="share/opencascade/data"
+INSTALL_DIR_SAMPLES="share/opencascade/samples"
+INSTALL_DIR_TESTS="share/opencascade/tests"
+INSTALL_DIR_CMAKE="lib/cmake/opencascade"
+INSTALL_DIR_LAYOUT="Unix"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.cibuildwheel]
+build = "cp312-*"
+skip = """
+  pp*
+  *_i686
+  *musllinux*
+  *win32
+"""
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "mv {wheel} {dest_dir} && rename linux_x86_64 manylinux_2_17_x86_64.manylinux2014_x86_64 {dest_dir}/*-linux_x86_64*.whl"
+
+[tool.cibuildwheel.macos]
+environment = {MACOSX_DEPLOYMENT_TARGET=10.15}
+repair-wheel-command = ""
+archs = ["x86_64", "arm64"]
