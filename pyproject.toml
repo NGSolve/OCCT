@@ -1,6 +1,6 @@
 [project]
 name = "netgen_occt"
-version = "0.0.3"
+version = "0.0.4"
 description="Open CASCADE Technology libraries, used by Netgen Mesher"
 requires-python = ">=3.8"
 classifiers = [
@@ -15,7 +15,7 @@ build-backend = "scikit_build_core.build"
 wheel.py-api = "py3"
 experimental = true
 wheel.install-dir = "/data"
-wheel.exclude = ["**.dylib", "**.so", "share"]
+wheel.exclude = ["*[a-zA-Z].dylib", "**.so", "share"]
 install.strip = true
 cmake.build-type = "Release"
 # build-dir = "build_py/{wheel_tag}" # build debugging - set a build-directly
