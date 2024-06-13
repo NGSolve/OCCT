@@ -1,6 +1,6 @@
 [project]
 name = "netgen_occt"
-version = "0.0.4"
+version = "0.0.5"
 description="Open CASCADE Technology libraries, used by Netgen Mesher"
 requires-python = ">=3.8"
 classifiers = [
