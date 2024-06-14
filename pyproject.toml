@@ -1,7 +1,8 @@
 [project]
 name = "netgen_occt"
 version = "0.0.6"
-description="Open CASCADE Technology libraries, used by Netgen Mesher"
+description = "Open CASCADE Technology libraries, used by Netgen Mesher"
+readme = {file = "README.txt", content-type = "text/plain"}
 requires-python = ">=3.8"
 classifiers = [
   "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)"
