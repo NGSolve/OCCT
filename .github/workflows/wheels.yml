@@ -13,7 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build wheels
+      - name: Build runtime package
+        uses: pypa/cibuildwheel@v2.19.1
+
+      - name: Replace pyproject.toml with pyproject_devel.toml
+        run: cp pyproject_devel.toml pyproject.toml
+
+      - name: Build devel package
         uses: pypa/cibuildwheel@v2.19.1
 
       - uses: actions/upload-artifact@v4
