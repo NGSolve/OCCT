@@ -1,7 +1,7 @@
 [project]
 name = "netgen_occt_devel"
-version = "0.0.9"
-dependencies= ["netgen-occt==0.0.9"]
+version = "0.0.10"
+dependencies= ["netgen-occt==0.0.10"]
 description = "Open CASCADE Technology libraries, used by Netgen Mesher (development files)"
 readme = {file = "README.txt", content-type = "text/plain"}
 requires-python = ">=3.8"
@@ -33,6 +33,15 @@ BUILD_MODULE_Visualization="OFF"
 BUILD_MODULE_ApplicationFramework="OFF"
 BUILD_MODULE_Draw="OFF"
 BUILD_MODULE_DETools="OFF"
+CAN_USE_FFMPEG="OFF"
+CAN_USE_FREEIMAGE="OFF"
+CAN_USE_FREETYPE="OFF"
+CAN_USE_GLES2="OFF"
+CAN_USE_OPENGL="OFF"
+CAN_USE_OPENVR="OFF"
+CAN_USE_TK="OFF"
+CAN_USE_XLIB="OFF"
+CAN_USE_VTK="OFF"
 USE_FREETYPE="OFF"
 USE_OPENGL="OFF"
 USE_XLIB="OFF"
