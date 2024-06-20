@@ -1,6 +1,7 @@
 [project]
 name = "netgen_occt_devel"
-version = "0.0.7"
+version = "0.0.8"
+dependencies= ["netgen-occt==0.0.8"]
 description = "Open CASCADE Technology libraries, used by Netgen Mesher (development files)"
 readme = {file = "README.txt", content-type = "text/plain"}
 requires-python = ">=3.8"
@@ -16,7 +17,7 @@ build-backend = "scikit_build_core.build"
 wheel.py-api = "py3"
 experimental = true
 wheel.install-dir = "/data"
-wheel.exclude = ["*.dylib", "*.so", "*.dll", "share", "*.cmake", "bin"]
+wheel.exclude = ["*.dylib", "*.so", "*.dll", "share", "*.cmake", "bin", "*.dylib.*", "*.so.*"]
 install.strip = true
 cmake.build-type = "Release"
 # build-dir = "build_py/{wheel_tag}" # build debugging - set a build-directly
@@ -47,9 +48,6 @@ INSTALL_DIR_SAMPLES="share/opencascade/samples"
 INSTALL_DIR_TESTS="share/opencascade/tests"
 INSTALL_DIR_CMAKE="lib/cmake/opencascade"
 INSTALL_DIR_LAYOUT="Unix"
-
-[project.optional-dependencies]
-test = ["pytest"]
 
 [tool.cibuildwheel]
 build = "cp312-*"
