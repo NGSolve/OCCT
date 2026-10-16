@@ -137,6 +137,8 @@ else()
       set (CSF_fontconfig "fontconfig expat")
     endif()
   endif()
+  set(CSF_OpenGlLibs "")
+  set(CSF_OpenGlesLibs "")
 endif()
 
 # Updates APPLE variables
