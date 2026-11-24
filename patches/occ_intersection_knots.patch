@@ -1,0 +1,469 @@
+diff --git a/src/ModelingAlgorithms/TKBO/IntTools/IntTools_FaceFace.cxx b/src/ModelingAlgorithms/TKBO/IntTools/IntTools_FaceFace.cxx
+index 226edfa143..e5a2771080 100644
+--- a/src/ModelingAlgorithms/TKBO/IntTools/IntTools_FaceFace.cxx
++++ b/src/ModelingAlgorithms/TKBO/IntTools/IntTools_FaceFace.cxx
+@@ -31,6 +31,7 @@
+ #include <GeomLib_Check2dBSplineCurve.hxx>
+ #include <GeomLib_CheckBSplineCurve.hxx>
+ #include <Geom_BSplineCurve.hxx>
++#include <Geom_BSplineSurface.hxx>
+ #include <Geom_Circle.hxx>
+ #include <Geom_Ellipse.hxx>
+ #include <Geom_Hyperbola.hxx>
+@@ -55,6 +56,9 @@
+ #include <gp_Elips.hxx>
+ #include <ApproxInt_KnotTools.hxx>
+ 
++#include <tuple>
++#include <vector>
++
+ static void Parameters(const occ::handle<GeomAdaptor_Surface>&,
+                        const occ::handle<GeomAdaptor_Surface>&,
+                        const gp_Pnt&,
+@@ -690,6 +694,349 @@ void IntTools_FaceFace::ComputeTolReached3d(const bool theToRunParallel)
+   }
+ }
+ 
++//=======================================================================
++// function : InsertKnotCrossings
++// purpose  : The parametrization of a B-spline surface is only C0 at knots
++//            with multiplicity >= degree, the parameter curves of the
++//            intersection have a kink there. The walking line may step over
++//            such a knot line with a large step, the approximation then
++//            overshoots between the two points (it measures its error only
++//            at the points of the line). Insert the exact intersection points
++//            on these knot lines into the walking line.
++//=======================================================================
++static void InsertKnotCrossings(const occ::handle<IntPatch_WLine>&      theWL,
++                                const occ::handle<GeomAdaptor_Surface>& theS1,
++                                const occ::handle<GeomAdaptor_Surface>& theS2)
++{
++  struct KnotLine
++  {
++    int    myParam; // index in (U1, V1, U2, V2)
++    double myValue;
++  };
++
++  std::vector<KnotLine>                  aKnots;
++  const occ::handle<GeomAdaptor_Surface> aSurfs[2] = {theS1, theS2};
++  for (int s = 0; s < 2; ++s)
++  {
++    if (aSurfs[s]->GetType() != GeomAbs_BSplineSurface)
++    {
++      continue;
++    }
++    const occ::handle<Geom_BSplineSurface> aBS = aSurfs[s]->BSpline();
++    for (int i = 2; i < aBS->NbUKnots(); ++i)
++    {
++      if (aBS->UMultiplicity(i) >= aBS->UDegree())
++      {
++        aKnots.push_back({2 * s, aBS->UKnot(i)});
++      }
++    }
++    for (int i = 2; i < aBS->NbVKnots(); ++i)
++    {
++      if (aBS->VMultiplicity(i) >= aBS->VDegree())
++      {
++        aKnots.push_back({2 * s + 1, aBS->VKnot(i)});
++      }
++    }
++  }
++  if (aKnots.empty())
++  {
++    return;
++  }
++
++  const occ::handle<IntSurf_LineOn2S> aLine = theWL->Curve();
++  const int                           aNb   = aLine->NbPoints();
++
++  std::vector<int> aNbIns(aNb + 1, 0);
++  for (int k = aNb - 1; k >= 1; --k)
++  {
++    double a[4], b[4];
++    aLine->Value(k).Parameters(a[0], a[1], a[2], a[3]);
++    aLine->Value(k + 1).Parameters(b[0], b[1], b[2], b[3]);
++    std::vector<std::pair<double, IntSurf_PntOn2S>> aNew;
++    for (const KnotLine& aKL : aKnots)
++    {
++      const int    p  = aKL.myParam;
++      const double kv = aKL.myValue;
++      if ((a[p] - kv) * (b[p] - kv) >= 0. || std::abs(b[p] - a[p]) < Precision::PConfusion())
++      {
++        continue;
++      }
++      const double aFrac = (kv - a[p]) / (b[p] - a[p]);
++      double       x[4];
++      for (int j = 0; j < 4; ++j)
++      {
++        x[j] = a[j] + aFrac * (b[j] - a[j]);
++      }
++      x[p] = kv;
++      // Newton for S1(x0, x1) = S2(x2, x3) with x[p] fixed
++      bool   isDone = false;
++      gp_Pnt aP1, aP2;
++      for (int it = 0; it < 30 && !isDone; ++it)
++      {
++        gp_Vec aD[4];
++        theS1->D1(x[0], x[1], aP1, aD[0], aD[1]);
++        theS2->D1(x[2], x[3], aP2, aD[2], aD[3]);
++        aD[2].Reverse();
++        aD[3].Reverse();
++        const gp_Vec aF(aP2, aP1);
++        if (aF.Magnitude() < Precision::Confusion() * 1.e-3)
++        {
++          isDone = true;
++          break;
++        }
++        int aCol[3], n = 0;
++        for (int j = 0; j < 4; ++j)
++        {
++          if (j != p)
++          {
++            aCol[n++] = j;
++          }
++        }
++        const double aDet = aD[aCol[0]].DotCross(aD[aCol[1]], aD[aCol[2]]);
++        if (std::abs(aDet) < 1.e-30)
++        {
++          break;
++        }
++        // Cramer: J * dx = -F
++        const gp_Vec aR = -aF;
++        x[aCol[0]] += aR.DotCross(aD[aCol[1]], aD[aCol[2]]) / aDet;
++        x[aCol[1]] += aD[aCol[0]].DotCross(aR, aD[aCol[2]]) / aDet;
++        x[aCol[2]] += aD[aCol[0]].DotCross(aD[aCol[1]], aR) / aDet;
++      }
++      if (!isDone)
++      {
++        continue;
++      }
++      // the solution must lie between the two points of the line; the parameters
++      // are not monotonic across the knot line, compare the distances in 3D
++      const gp_Pnt aPM((aP1.XYZ() + aP2.XYZ()) * 0.5);
++      const gp_Pnt aPA = aLine->Value(k).Value(), aPB = aLine->Value(k + 1).Value();
++      const double aChord = aPA.Distance(aPB) + Precision::Confusion();
++      if (aPM.Distance(aPA) > aChord || aPM.Distance(aPB) > aChord)
++      {
++        continue;
++      }
++      IntSurf_PntOn2S aPnt;
++      aPnt.SetValue(aPM, x[0], x[1], x[2], x[3]);
++      aNew.emplace_back(aFrac, aPnt);
++    }
++    std::sort(aNew.begin(), aNew.end(), [](const auto& l, const auto& r) {
++      return l.first < r.first;
++    });
++    for (size_t j = 0; j < aNew.size(); ++j)
++    {
++      aLine->InsertBefore(k + 1 + (int)j, aNew[j].second);
++    }
++    aNbIns[k] = (int)aNew.size();
++  }
++
++  // shift the vertex parameters (point indices) of the line
++  std::vector<double> aMap(aNb + 1, 0.);
++  int                 aShift = 0;
++  for (int k = 1; k <= aNb; ++k)
++  {
++    aMap[k] = k + aShift;
++    aShift += aNbIns[k];
++  }
++  if (aShift == 0)
++  {
++    return;
++  }
++  NCollection_Sequence<IntPatch_Point> aVtx;
++  for (int v = 1; v <= theWL->NbVertex(); ++v)
++  {
++    IntPatch_Point aV  = theWL->Vertex(v);
++    const double   aPL = aV.ParameterOnLine();
++    const int      m   = std::max(1, std::min(aNb, (int)std::floor(aPL + 1.e-9)));
++    const double   aFr = aPL - m;
++    const double   aNP = (m < aNb) ? aMap[m] + aFr * (aMap[m + 1] - aMap[m]) : aMap[m] + aFr;
++    aV.SetParameter(aNP);
++    aVtx.Append(aV);
++  }
++  theWL->ClearVertexes();
++  for (const IntPatch_Point& aV : aVtx)
++  {
++    theWL->AddVertex(aV);
++  }
++}
++
++//=======================================================================
++// function : IsOnKnotLine
++// purpose  : True if the point lies exactly on a C0 knot line of one of the
++//            B-spline surfaces (inserted by InsertKnotCrossings)
++//=======================================================================
++static bool IsOnKnotLine(const IntSurf_PntOn2S&                  thePnt,
++                         const occ::handle<GeomAdaptor_Surface>& theS1,
++                         const occ::handle<GeomAdaptor_Surface>& theS2)
++{
++  double aPrm[4];
++  thePnt.Parameters(aPrm[0], aPrm[1], aPrm[2], aPrm[3]);
++  const occ::handle<GeomAdaptor_Surface> aSurfs[2] = {theS1, theS2};
++  for (int s = 0; s < 2; ++s)
++  {
++    if (aSurfs[s]->GetType() != GeomAbs_BSplineSurface)
++    {
++      continue;
++    }
++    const occ::handle<Geom_BSplineSurface> aBS = aSurfs[s]->BSpline();
++    for (int i = 2; i < aBS->NbUKnots(); ++i)
++    {
++      if (aBS->UMultiplicity(i) >= aBS->UDegree() && aPrm[2 * s] == aBS->UKnot(i))
++      {
++        return true;
++      }
++    }
++    for (int i = 2; i < aBS->NbVKnots(); ++i)
++    {
++      if (aBS->VMultiplicity(i) >= aBS->VDegree() && aPrm[2 * s + 1] == aBS->VKnot(i))
++      {
++        return true;
++      }
++    }
++  }
++  return false;
++}
++
++//=======================================================================
++// function : ConcatBSplines
++// purpose  : Joins clamped B-spline curves (C0 at the joints) after shifting
++//            piece i by theOffsets[i]
++//=======================================================================
++static gp_Pnt MidPoint(const gp_Pnt& a, const gp_Pnt& b)
++{
++  return gp_Pnt((a.XYZ() + b.XYZ()) * 0.5);
++}
++
++static gp_Pnt2d MidPoint(const gp_Pnt2d& a, const gp_Pnt2d& b)
++{
++  return gp_Pnt2d((a.XY() + b.XY()) * 0.5);
++}
++
++template <class TC, class TP>
++static occ::handle<TC> ConcatBSplines(const std::vector<occ::handle<TC>>& theCurves,
++                                      const std::vector<double>&          theOffsets)
++{
++  int aDeg = 0;
++  for (const occ::handle<TC>& c : theCurves)
++  {
++    if (c.IsNull() || c->IsPeriodic() || c->Multiplicity(1) != c->Degree() + 1
++        || c->Multiplicity(c->NbKnots()) != c->Degree() + 1)
++    {
++      return occ::handle<TC>();
++    }
++    aDeg = std::max(aDeg, c->Degree());
++  }
++  std::vector<TP>     aPoles;
++  std::vector<double> aKnots;
++  std::vector<int>    aMults;
++  for (size_t i = 0; i < theCurves.size(); ++i)
++  {
++    occ::handle<TC> c = occ::down_cast<TC>(theCurves[i]->Copy());
++    c->IncreaseDegree(aDeg);
++    const int aFirst = (i == 0) ? 1 : 2;
++    if (i > 0)
++    {
++      aMults.back() = aDeg;
++      aPoles.back() = MidPoint(aPoles.back(), c->Pole(1));
++    }
++    for (int k = aFirst; k <= c->NbPoles(); ++k)
++    {
++      aPoles.push_back(c->Pole(k));
++    }
++    for (int k = aFirst; k <= c->NbKnots(); ++k)
++    {
++      aKnots.push_back(c->Knot(k) + theOffsets[i]);
++      aMults.push_back(c->Multiplicity(k));
++    }
++  }
++  NCollection_Array1<TP>     aP(1, (int)aPoles.size());
++  NCollection_Array1<double> aK(1, (int)aKnots.size());
++  NCollection_Array1<int>    aM(1, (int)aMults.size());
++  for (size_t k = 0; k < aPoles.size(); ++k)
++  {
++    aP((int)k + 1) = aPoles[k];
++  }
++  for (size_t k = 0; k < aKnots.size(); ++k)
++  {
++    aK((int)k + 1) = aKnots[k];
++    aM((int)k + 1) = aMults[k];
++  }
++  return new TC(aP, aK, aM, aDeg);
++}
++
++//=======================================================================
++// function : JoinCurves
++// purpose  : Replaces the consecutive curves theFirst..theLast of theSeq
++//            (pieces of one intersection line split at knot lines of the
++//            surfaces) by one curve
++//=======================================================================
++static void JoinCurves(NCollection_Sequence<IntTools_Curve>& theSeq,
++                       const int                             theFirst,
++                       const int                             theLast)
++{
++  if (theLast <= theFirst)
++  {
++    return;
++  }
++  std::vector<occ::handle<Geom_BSplineCurve>>   aC3;
++  std::vector<occ::handle<Geom2d_BSplineCurve>> aC1, aC2;
++  std::vector<double>                           aOffsets;
++  double                                        aTol = 0., aTangTol = 0., aEnd = 0.;
++  bool                                          isNull1 = false, isNull2 = false;
++  for (int i = theFirst; i <= theLast; ++i)
++  {
++    const IntTools_Curve&                aIC = theSeq(i);
++    const occ::handle<Geom_BSplineCurve> aBS = occ::down_cast<Geom_BSplineCurve>(aIC.Curve());
++    if (aBS.IsNull())
++    {
++      return;
++    }
++    if (i > theFirst && aC3.back()->EndPoint().Distance(aBS->StartPoint()) > Precision::Confusion())
++    {
++      return;
++    }
++    aOffsets.push_back(i == theFirst ? 0. : aEnd - aBS->FirstParameter());
++    aEnd = aBS->LastParameter() + aOffsets.back();
++    aC3.push_back(aBS);
++    aC1.push_back(occ::down_cast<Geom2d_BSplineCurve>(aIC.FirstCurve2d()));
++    aC2.push_back(occ::down_cast<Geom2d_BSplineCurve>(aIC.SecondCurve2d()));
++    isNull1 |= aIC.FirstCurve2d().IsNull();
++    isNull2 |= aIC.SecondCurve2d().IsNull();
++    aTol     = std::max(aTol, aIC.Tolerance());
++    aTangTol = std::max(aTangTol, aIC.TangentialTolerance());
++  }
++  const occ::handle<Geom_BSplineCurve> aJ3 =
++    ConcatBSplines<Geom_BSplineCurve, gp_Pnt>(aC3, aOffsets);
++  occ::handle<Geom2d_BSplineCurve> aJ1, aJ2;
++  if (!isNull1)
++  {
++    aJ1 = ConcatBSplines<Geom2d_BSplineCurve, gp_Pnt2d>(aC1, aOffsets);
++  }
++  if (!isNull2)
++  {
++    aJ2 = ConcatBSplines<Geom2d_BSplineCurve, gp_Pnt2d>(aC2, aOffsets);
++  }
++  if (aJ3.IsNull() || (!isNull1 && aJ1.IsNull()) || (!isNull2 && aJ2.IsNull()))
++  {
++    return;
++  }
++  IntTools_Curve aRes;
++  aRes.SetCurve(aJ3);
++  aRes.SetFirstCurve2d(aJ1);
++  aRes.SetSecondCurve2d(aJ2);
++  aRes.SetTolerance(aTol);
++  aRes.SetTangentialTolerance(aTangTol);
++  theSeq.Remove(theFirst, theLast);
++  if (theFirst > theSeq.Length())
++  {
++    theSeq.Append(aRes);
++  }
++  else
++  {
++    theSeq.InsertBefore(theFirst, aRes);
++  }
++}
++
+ //=================================================================================================
+ 
+ void IntTools_FaceFace::MakeCurve(const int                               Index,
+@@ -729,6 +1076,11 @@ reapprox:;
+       return;
+     }
+     L = aWLine;
++    // before the line constructor, its parts refer to point indices
++    if (myApprox)
++    {
++      InsertKnotCrossings(aWLine, myHS1, myHS2);
++    }
+ 
+     int                    nbp = aWLine->NbPnts();
+     const IntSurf_PntOn2S& p1  = aWLine->Point(1);
+@@ -1290,6 +1642,10 @@ reapprox:;
+           }
+         }
+         //
++        // the parts of the line, split at the points on C0 knot lines of
++        // the surfaces (see InsertKnotCrossings): the parameter curves have
++        // a kink there, each piece is approximated separately
++        std::vector<std::tuple<occ::handle<IntPatch_WLine>, int, int, int>> aRanges;
+         for (i = 1; i <= nbiter; ++i)
+         {
+           if (bIsDecomposited)
+@@ -1312,6 +1668,34 @@ reapprox:;
+               ilprm = (int)lprm;
+             }
+           }
++          // a piece approximated without tangents needs at least as many points
++          // as poles of the minimal degree 4
++          int aFirst = ifprm;
++          for (int k = ifprm + 4; k <= ilprm - 4; ++k)
++          {
++            if (k - aFirst >= 4 && IsOnKnotLine(WL->Point(k), myHS1, myHS2))
++            {
++              aRanges.emplace_back(WL, aFirst, k, i);
++              aFirst = k;
++            }
++          }
++          aRanges.emplace_back(WL, aFirst, ilprm, i);
++        }
++        // first curve index of each group of pieces, joined after the loop
++        std::vector<std::pair<int, int>> aGroups; // (group, first index in mySeqOfCurve)
++        for (const auto& aRange : aRanges)
++        {
++          if (aGroups.empty() || aGroups.back().first != std::get<3>(aRange))
++          {
++            aGroups.emplace_back(std::get<3>(aRange), mySeqOfCurve.Length() + 1);
++          }
++          WL    = std::get<0>(aRange);
++          ifprm = std::get<1>(aRange);
++          ilprm = std::get<2>(aRange);
++          // the surface derivatives at a point on a knot line belong to one
++          // side, the tangents derived from them are wrong for the other
++          const bool aWithTang = !IsOnKnotLine(WL->Point(ifprm), myHS1, myHS2)
++                                 && !IsOnKnotLine(WL->Point(ilprm), myHS1, myHS2);
+ 
+           bool anApprox = myApprox;
+           if (typs1 == GeomAbs_Plane)
+@@ -1343,8 +1727,14 @@ reapprox:;
+               int iDegMax, iDegMin, iNbIter;
+               //
+               ApproxParameters(myHS1, myHS2, iDegMin, iDegMax, iNbIter);
+-              theapp3d
+-                .SetParameters(myTolApprox, tol2d, iDegMin, iDegMax, iNbIter, 30, true, aParType);
++              theapp3d.SetParameters(myTolApprox,
++                                     tol2d,
++                                     iDegMin,
++                                     iDegMax,
++                                     iNbIter,
++                                     30,
++                                     aWithTang,
++                                     aParType);
+             }
+           }
+ 
+@@ -1368,7 +1758,7 @@ reapprox:;
+                   && (typs2 == GeomAbs_BezierSurface || typs2 == GeomAbs_BSplineSurface))
+               {
+ 
+-                theapp3d.SetParameters(myTolApprox, tol2d, 4, 8, 0, 30, true, aParType);
++                theapp3d.SetParameters(myTolApprox, tol2d, 4, 8, 0, 30, aWithTang, aParType);
+ 
+                 bool bUseSurfaces;
+                 bUseSurfaces =
+@@ -1735,6 +2125,12 @@ reapprox:;
+             }
+           }
+         }
++        for (int g = (int)aGroups.size() - 1; g >= 0; --g)
++        {
++          const int aLast =
++            (g + 1 < (int)aGroups.size()) ? aGroups[g + 1].second - 1 : mySeqOfCurve.Length();
++          JoinCurves(mySeqOfCurve, aGroups[g].second, aLast);
++        }
+       } // else { // X
+     } // case IntPatch_Walking:{
+     break;

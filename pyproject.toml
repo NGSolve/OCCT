@@ -1,6 +1,6 @@
 [project]
 name = "netgen_occt"
-version = "8.0.1"
+version = "8.0.1.post1"
 description = "Open CASCADE Technology libraries, used by Netgen Mesher"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"

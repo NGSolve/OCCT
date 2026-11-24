@@ -1,0 +1,113 @@
+diff --git a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
+index d97bfa7238..f0833d1d77 100644
+--- a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
++++ b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
+@@ -932,7 +932,7 @@ void Extrema_GenExtPS::BuildTree()
+   aFiller.Fill();
+ }
+ 
+-void Extrema_GenExtPS::FindSolution(const gp_Pnt& /*P*/, const Extrema_POnSurfParams& theParams)
++void Extrema_GenExtPS::FindSolution(const gp_Pnt& P, const Extrema_POnSurfParams& theParams)
+ {
+   math_Vector Tol(1, 2);
+   Tol(1) = mytolu;
+@@ -949,6 +949,12 @@ void Extrema_GenExtPS::FindSolution(const gp_Pnt& /*P*/, const Extrema_POnSurfPa
+ 
+   math_FunctionSetRoot S(myF, Tol);
+   S.Perform(myF, UV, UVinf, UVsup);
++  if (S.IsDone())
++  {
++    math_Vector aRoot(1, 2);
++    S.Root(aRoot);
++    polishRoot(P, aRoot(1), aRoot(2));
++  }
+ 
+   // The first derivatives jump at knots where the surface is only C0 (e.g. G1 joints of
+   // B-spline surfaces). Started close to such a knot, the solver can stop on the knot or
+@@ -997,6 +1003,72 @@ void Extrema_GenExtPS::FindSolution(const gp_Pnt& /*P*/, const Extrema_POnSurfPa
+   myDone = true;
+ }
+ 
++//=================================================================================================
++
++void Extrema_GenExtPS::polishRoot(const gp_Pnt& theP, double theU, double theV)
++{
++  // math_FunctionSetRoot minimizes the squared norm of the gradient of the distance in
++  // parameter space. Where the parametric speeds in U and V differ much, this norm does not
++  // follow the distance and the solver can stop at a point that is no extremum. Continue
++  // from there with Gauss-Newton steps on the distance, they do not depend on the
++  // parametrization.
++  gp_Pnt aPs;
++  gp_Vec aSu, aSv;
++  myS->D1(theU, theV, aPs, aSu, aSv);
++  const double aNu = aSu.Magnitude(), aNv = aSv.Magnitude();
++  if (aNu < Precision::Confusion() || aNv < Precision::Confusion())
++  {
++    return;
++  }
++  gp_Vec aD(theP, aPs);
++  if (std::max(std::abs(aD.Dot(aSu)) / aNu, std::abs(aD.Dot(aSv)) / aNv) <= Precision::Confusion())
++  {
++    return;
++  }
++  for (int anIter = 0; anIter < 100; ++anIter)
++  {
++    const double a = aSu.SquareMagnitude(), b = aSu.Dot(aSv), c = aSv.SquareMagnitude();
++    const double aDet = a * c - b * b;
++    if (aDet <= 1.e-12 * a * c)
++    {
++      break; // tangents (nearly) parallel
++    }
++    const double aGu = -aD.Dot(aSu), aGv = -aD.Dot(aSv);
++    double       aDu = (c * aGu - b * aGv) / aDet, aDv = (a * aGv - b * aGu) / aDet;
++    bool         isBetter = false;
++    double       aU = theU, aV = theV;
++    gp_Pnt       aPn;
++    gp_Vec       aSun, aSvn;
++    for (int aHalf = 0; aHalf < 20 && !isBetter; ++aHalf, aDu *= 0.5, aDv *= 0.5)
++    {
++      aU = std::min(std::max(theU + aDu, myumin), myusup);
++      aV = std::min(std::max(theV + aDv, myvmin), myvsup);
++      myS->D1(aU, aV, aPn, aSun, aSvn);
++      isBetter = theP.SquareDistance(aPn) < theP.SquareDistance(aPs);
++    }
++    if (!isBetter)
++    {
++      break;
++    }
++    const bool isConverged = std::abs(aU - theU) <= mytolu && std::abs(aV - theV) <= mytolv;
++    theU                   = aU;
++    theV                   = aV;
++    aPs                    = aPn;
++    aSu                    = aSun;
++    aSv                    = aSvn;
++    aD                     = gp_Vec(theP, aPs);
++    if (isConverged)
++    {
++      break;
++    }
++  }
++  math_Vector aUV(1, 2), aF(1, 2);
++  aUV(1) = theU;
++  aUV(2) = theV;
++  myF.Value(aUV, aF);
++  myF.GetStateNumber();
++}
++
+ void Extrema_GenExtPS::SetFlag(const Extrema_ExtFlag F)
+ {
+   myFlag = F;
+diff --git a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.hxx b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.hxx
+index 0a2804bab5..9a69691d43 100644
+--- a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.hxx
++++ b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.hxx
+@@ -132,6 +132,9 @@ private:
+ 
+   Standard_EXPORT void FindSolution(const gp_Pnt& P, const Extrema_POnSurfParams& theParams);
+ 
++  //! Continues from a root of the solver that is no extremum of the distance.
++  void polishRoot(const gp_Pnt& theP, double theU, double theV);
++
+   //! Selection of points to build grid, depending on the type of surface
+   Standard_EXPORT void GetGridPoints(const Adaptor3d_Surface& theSurf);
+ 

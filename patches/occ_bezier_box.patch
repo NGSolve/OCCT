@@ -1,0 +1,21 @@
+diff --git a/src/ModelingData/TKGeomBase/GeomBndLib/GeomBndLib_BezierSurface.cxx b/src/ModelingData/TKGeomBase/GeomBndLib/GeomBndLib_BezierSurface.cxx
+index 12a5efe903..92782e3604 100644
+--- a/src/ModelingData/TKGeomBase/GeomBndLib/GeomBndLib_BezierSurface.cxx
++++ b/src/ModelingData/TKGeomBase/GeomBndLib/GeomBndLib_BezierSurface.cxx
+@@ -60,6 +60,16 @@ Bnd_Box GeomBndLib_BezierSurface::Box(double theUMin,
+     return Box(theTol);
+   }
+ 
++  // Trimmed Bezier inside the bounds: convex hull of the poles of the segment.
++  // The grid sampling below misses the surface between the samples.
++  if (theUMin >= aU1 - PTol && theUMax <= aU2 + PTol && theVMin >= aV1 - PTol
++      && theVMax <= aV2 + PTol)
++  {
++    occ::handle<Geom_BezierSurface> aSegment = occ::down_cast<Geom_BezierSurface>(myGeom->Copy());
++    aSegment->Segment(theUMin, theUMax, theVMin, theVMax);
++    return GeomBndLib_BezierSurface(aSegment).Box(theTol);
++  }
++
+   // Trimmed Bezier: fall back to grid sampling.
+   GeomAdaptor_Surface aGASurf(myGeom);
+   const int           aNbUSamples = GeomBndLib_SamplingHelpers::ComputeNbUSamples(aGASurf);

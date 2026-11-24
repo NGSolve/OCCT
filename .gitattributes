@@ -85,3 +85,4 @@ adm/upgrade.dat eol=lf
 *.rgb       binary
 *.mft       binary
 *.stl       binary
+*.patch     eol=lf

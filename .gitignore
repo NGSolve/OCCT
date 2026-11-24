@@ -16,6 +16,7 @@
 !/README.md
 !/pyproject.toml
 !/pyproject_devel.toml
+!/patches/
 !/adm/
 !/cmake/
 !/data/

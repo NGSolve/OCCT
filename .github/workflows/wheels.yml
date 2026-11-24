@@ -13,6 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Apply patches
+        shell: bash
+        run: |
+          for p in patches/*.patch; do git apply "$p"; done
+
       - name: Build runtime package
         uses: pypa/cibuildwheel@v2.19.1
 

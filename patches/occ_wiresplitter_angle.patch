@@ -1,0 +1,47 @@
+diff --git a/src/ModelingAlgorithms/TKBO/BOPAlgo/BOPAlgo_WireSplitter_1.cxx b/src/ModelingAlgorithms/TKBO/BOPAlgo/BOPAlgo_WireSplitter_1.cxx
+index 2660043817..42bc265e45 100644
+--- a/src/ModelingAlgorithms/TKBO/BOPAlgo/BOPAlgo_WireSplitter_1.cxx
++++ b/src/ModelingAlgorithms/TKBO/BOPAlgo/BOPAlgo_WireSplitter_1.cxx
+@@ -772,7 +772,7 @@ double Angle2D(const TopoDS_Vertex&                 aV,
+                const bool                           bIsIN,
+                const occ::handle<IntTools_Context>& theContext)
+ {
+-  double                    aFirst, aLast, aToler, dt, aTV, aTV1, anAngle, aTX;
++  double                    aFirst, aLast, aToler, dt, aTV, anAngle, aTX;
+   gp_Pnt2d                  aPV, aPV1;
+   gp_Vec2d                  aV2D;
+   occ::handle<Geom2d_Curve> aC2D;
+@@ -819,18 +819,24 @@ double Angle2D(const TopoDS_Vertex&                 aV,
+     dt = aTX;
+   }
+ 
+-  if (fabs(aTV - aFirst) < fabs(aTV - aLast))
+-  {
+-    aTV1 = aTV + dt;
+-  }
+-  else
++  const double aSign = (fabs(aTV - aFirst) < fabs(aTV - aLast)) ? 1. : -1.;
++  aGAC2D.D0(aTV, aPV);
++  aGAC2D.D0(aTV + aSign * dt, aPV1);
++  // On a strongly curved p-curve the chord to a far point deviates from the tangent and may
++  // swap the order of edges leaving the vertex at a small angle. Shrink the step as long as
++  // the point stays outside the tolerance zone of the vertex.
++  for (int i = 0; i < 50 && aPV1.Distance(aPV) > 10. * tol2d; ++i)
+   {
+-    aTV1 = aTV - dt;
++    gp_Pnt2d aPV2;
++    aGAC2D.D0(aTV + aSign * 0.5 * dt, aPV2);
++    if (aPV2.Distance(aPV) < 2. * tol2d)
++    {
++      break;
++    }
++    dt *= 0.5;
++    aPV1 = aPV2;
+   }
+   //
+-  aGAC2D.D0(aTV1, aPV1);
+-  aGAC2D.D0(aTV, aPV);
+-  //
+   aV2D = bIsIN ? gp_Vec2d(aPV1, aPV) : gp_Vec2d(aPV, aPV1);
+   //
+   gp_Dir2d aDir2D(aV2D);

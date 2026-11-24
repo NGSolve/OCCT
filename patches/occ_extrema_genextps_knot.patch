@@ -1,0 +1,64 @@
+diff --git a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
+index e22509a09f..d97bfa7238 100644
+--- a/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
++++ b/src/ModelingData/TKGeomBase/Extrema/Extrema_GenExtPS.cxx
+@@ -18,6 +18,8 @@
+ 
+ #include <Extrema_GenExtPS.hxx>
+ 
++#include <algorithm>
++
+ #include <Adaptor3d_Curve.hxx>
+ #include <Adaptor3d_Surface.hxx>
+ #include <Bnd_Sphere.hxx>
+@@ -948,6 +950,50 @@ void Extrema_GenExtPS::FindSolution(const gp_Pnt& /*P*/, const Extrema_POnSurfPa
+   math_FunctionSetRoot S(myF, Tol);
+   S.Perform(myF, UV, UVinf, UVsup);
+ 
++  // The first derivatives jump at knots where the surface is only C0 (e.g. G1 joints of
++  // B-spline surfaces). Started close to such a knot, the solver can stop on the knot or
++  // fail without reaching a root on the other side. Then restart from the mirrored point
++  // on the other side of the knot.
++  math_Vector aRoot(1, 2);
++  if (S.IsDone())
++  {
++    S.Root(aRoot);
++  }
++  for (int i = 1; i <= 2; i++)
++  {
++    const int aNbInt = (i == 1) ? myS->NbUIntervals(GeomAbs_C1) : myS->NbVIntervals(GeomAbs_C1);
++    if (aNbInt < 2)
++    {
++      continue;
++    }
++    NCollection_Array1<double> aKnots(1, aNbInt + 1);
++    if (i == 1)
++    {
++      myS->UIntervals(aKnots, GeomAbs_C1);
++    }
++    else
++    {
++      myS->VIntervals(aKnots, GeomAbs_C1);
++    }
++    const double aTol = std::max(Tol(i), Precision::PConfusion());
++    for (int k = 2; k <= aNbInt; k++)
++    {
++      const double aKnot = aKnots(k);
++      const double aDist = std::abs(UV(i) - aKnot);
++      const bool   isNear =
++        aDist > aTol && aDist < 0.5 * std::min(aKnot - aKnots(k - 1), aKnots(k + 1) - aKnot);
++      const bool isStuck = !S.IsDone() || std::abs(aRoot(i) - aKnot) <= aTol;
++      if (!isNear || !isStuck)
++      {
++        continue;
++      }
++      math_Vector aUV2(UV);
++      aUV2(i) = std::clamp(2. * aKnot - UV(i), UVinf(i), UVsup(i));
++      math_FunctionSetRoot aS2(myF, Tol);
++      aS2.Perform(myF, aUV2, UVinf, UVsup);
++    }
++  }
++
+   myDone = true;
+ }
+ 

@@ -1,0 +1,62 @@
+diff --git a/src/ModelingAlgorithms/TKBO/IntTools/IntTools_EdgeEdge.cxx b/src/ModelingAlgorithms/TKBO/IntTools/IntTools_EdgeEdge.cxx
+index c18cd1fb30..90be4247da 100644
+--- a/src/ModelingAlgorithms/TKBO/IntTools/IntTools_EdgeEdge.cxx
++++ b/src/ModelingAlgorithms/TKBO/IntTools/IntTools_EdgeEdge.cxx
+@@ -579,17 +579,37 @@ bool IntTools_EdgeEdge::FindParameters(const BRepAdaptor_Curve& theBAC,
+   //
+   for (i = 0; i < 2; ++i)
+   {
+-    aTB      = !i ? aT1 : aT2;
+-    aT       = !i ? aT2 : aTB1;
+-    aC       = !i ? 1 : -1;
+-    aDt      = theRes;
+-    aDistP   = 0.;
+-    bRet     = false;
+-    double k = 1;
++    aTB            = !i ? aT1 : aT2;
++    aT             = !i ? aT2 : aTB1;
++    aC             = !i ? 1 : -1;
++    aDt            = theRes;
++    aDistP         = 0.;
++    bRet           = false;
++    double k       = 1;
++    double aTBPrev = aTB;
++    bool   isGrown = false;
++    gp_Pnt aPPrev;
+     // looking for the point on the edge which is in the box;
+-    while (aC * (aT - aTB) >= 0)
++    for (;;)
+     {
+-      theBAC.D0(aTB, aP);
++      const bool isPast = aC * (aT - aTB) < 0;
++      if (!isPast)
++      {
++        theBAC.D0(aTB, aP);
++      }
++      // a grown step moves further than the distance to the box and may jump over it,
++      // repeat it with the safe step
++      if (isGrown && (isPast || aP.Distance(aPPrev) > aDistP))
++      {
++        k       = 1;
++        isGrown = false;
++        aTB     = aTBPrev + aC * Resolution(aCurve, aCurveType, theResCoeff, aDistP);
++        continue;
++      }
++      if (isPast)
++      {
++        break;
++      }
+       aDist = PointBoxDistance(theCBox, aP);
+       if (aDist > theTol)
+       {
+@@ -610,7 +630,10 @@ bool IntTools_EdgeEdge::FindParameters(const BRepAdaptor_Curve& theBAC,
+             k   = 1;
+             aDt = Resolution(aCurve, aCurveType, theResCoeff, aDist);
+           }
++          isGrown = toGrow && k > 2;
+         }
++        aTBPrev = aTB;
++        aPPrev  = aP;
+         aTB += aC * aDt;
+       }
+       else
