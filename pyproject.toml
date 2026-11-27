@@ -16,7 +16,8 @@ build-backend = "scikit_build_core.build"
 wheel.py-api = "py3"
 experimental = true
 wheel.install-dir = "/data"
-wheel.exclude = ["*[a-zA-Z].dylib", "**.so", "share", "*.lib", "include", "*.cmake", "bin/*.sh"]
+# contains also the devel files, .github/split_wheel.py splits it into netgen_occt and netgen_occt_devel
+wheel.exclude = ["*[a-zA-Z].dylib", "**.so", "share", "bin/*.sh"]
 install.strip = true
 cmake.build-type = "Release"
 # build-dir = "build_py/{wheel_tag}" # build debugging - set a build-directly

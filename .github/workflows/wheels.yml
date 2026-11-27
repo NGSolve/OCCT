@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,14 +24,11 @@ jobs:
           python patches/deterministic_math/gen_mathlib.py .
           python patches/deterministic_math/rewrite_calls.py .
 
-      - name: Build runtime package
+      - name: Build package
         uses: pypa/cibuildwheel@v2.19.1
 
-      - name: Replace pyproject.toml with pyproject_devel.toml
-        run: cp pyproject_devel.toml pyproject.toml
-
-      - name: Build devel package
-        uses: pypa/cibuildwheel@v2.19.1
+      - name: Split into runtime and devel package
+        run: python .github/split_wheel.py wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:

@@ -108,6 +108,8 @@ for f in FILES:
     t = (src / f"{f}.c").read_text()
     t = re.sub(r'^\s*#\s*include\s*[<"](cdefs-compat\.h|math_private\.h|openlibm_math\.h|float\.h)[>"].*\n', "", t, flags=re.M)
     t = t.replace('#include "k_log.h"', '#include "OccMath_k_log.h"')
+    # internal functions are not exported (MSVC requires matching declarations)
+    t = re.sub(r"OLM_DLLEXPORT (\w+\s*\n(?:__kernel_\w+|__ldexp_exp)\()", r"\1", t)
     if f == "k_exp":
         t = t.replace("#include <openlibm_complex.h>\n", "")
         t = t[:t.index("OLM_DLLEXPORT double complex")]
