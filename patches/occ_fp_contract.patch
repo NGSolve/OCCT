@@ -1,0 +1,14 @@
+diff --git a/adm/cmake/occt_defs_flags.cmake b/adm/cmake/occt_defs_flags.cmake
+index 87a7fd4c24..c3f887dadb 100644
+--- a/adm/cmake/occt_defs_flags.cmake
++++ b/adm/cmake/occt_defs_flags.cmake
+@@ -33,6 +33,9 @@ if (MSVC)
+ else()
+   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
+   set (CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -fexceptions")
++  # no FMA contraction (default on arm64), results must not depend on the target
++  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
++  set (CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -ffp-contract=off")
+   if (NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+     set (CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -fPIC")

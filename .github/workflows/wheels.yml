@@ -8,15 +8,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-15]
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-14]
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Apply patches
         shell: bash
         run: |
           for p in patches/*.patch; do git apply "$p"; done
+          python patches/deterministic_math/gen_mathlib.py .
+          python patches/deterministic_math/rewrite_calls.py .
 
       - name: Build runtime package
         uses: pypa/cibuildwheel@v2.19.1
@@ -38,7 +44,6 @@ jobs:
     environment: pypi
     permissions:
       id-token: write
-      actions: read
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -46,14 +51,6 @@ jobs:
           pattern: cibw-*
           path: dist
           merge-multiple: true
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: cibw-*
-          path: dist
-          merge-multiple: true
-          run-id: 45615694771
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
